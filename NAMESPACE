@@ -1,0 +1,8 @@
+useDynLib(DPP, .registration=TRUE)
+#exportPattern("^[[:alpha:]]+")
+export(Model)
+export(DPPmcmc, NormalModel, GammaModel, dppMCMC_C)
+export(expectedNumberOfClusters)
+importFrom(Rcpp, loadModule,evalCpp)
+importFrom("methods", "new")
+importFrom("coda", "effectiveSize")
