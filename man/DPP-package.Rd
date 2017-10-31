@@ -65,7 +65,7 @@ normal.model<-new(NormalModel,
  \dontrun{
  my_dpp_analysis$run(generations=1000,auto_stop=TRUE,max_gen = 10000,min_ess = 500)
 
- #we get rid of the first 25% of the output (burn-in)
+ #we get rid of the first 25\% of the output (burn-in)
  hist(my_dpp_analysis$getNumCategoryTrace(0.25))
  my_dpp_analysis$getNumCategoryProbabilities(0.25)
  }

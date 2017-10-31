@@ -2,7 +2,7 @@ Package: DPP
 Type: Package
 Title: Inference of Parameters of Normal Distributions from a Mixture
         of Normals
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("Luis M.", "Avila", email = "lmavila@gmail.com", role = c("aut","cre")),
     person("Michael R.", "May", email = "mikeryanmay@ucdavis.edu", role = "aut"),
@@ -16,10 +16,10 @@ LinkingTo: Rcpp
 RcppModules: DPPmcmc,Models
 RoxygenNote: 6.0.1
 NeedsCompilation: yes
-Packaged: 2017-09-27 17:45:05 UTC; lavila
+Packaged: 2017-10-31 16:57:09 UTC; lavila
 Author: Luis M. Avila [aut, cre],
   Michael R. May [aut],
   Jeff Ross-Ibarra [aut]
 Maintainer: Luis M. Avila <lmavila@gmail.com>
 Repository: CRAN
-Date/Publication: 2017-09-27 18:19:45 UTC
+Date/Publication: 2017-10-31 20:44:34 UTC

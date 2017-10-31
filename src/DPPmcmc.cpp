@@ -340,7 +340,7 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
         //DoubleVector likelihood_ESS_vector=effectiveSizeFunction(elementsInRange((int)floor(num_logged / 4),num_logged-1,likelihood_trace));
        // double likelihood_ESS=(double)likelihood_ESS_vector[0];
 
-        DoubleVector num_cats_ESS_vector=effectiveSizeFunction(elementsInRange((int)floor(num_logged / 4),num_logged-1,num_cats_trace));
+        DoubleVector num_cats_ESS_vector=effectiveSizeFunction(elementsInRange((int)std::floor(num_logged / 4.0),num_logged-1,num_cats_trace));
         double num_cats_ESS=num_cats_ESS_vector[0];
 
         NumericVector pminResult=pminFunction(num_cats_ESS);
@@ -348,7 +348,7 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
 
         double  alpha_ESS=0;
         if (estimate_concentration_parameter) {
-         NumericVector alpha_ESS_vector=effectiveSizeFunction(elementsInRange((int)floor(num_logged / 4),num_logged-1,alpha_trace));
+         NumericVector alpha_ESS_vector=effectiveSizeFunction(elementsInRange((int)std::floor(num_logged / 4.0),num_logged-1,alpha_trace));
           alpha_ESS= alpha_ESS_vector[0];
           NumericVector pminResult=pminFunction(alpha_ESS,num_cats_ESS);
           min_ESS = (double)pminResult[0];
