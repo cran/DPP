@@ -27,6 +27,7 @@ public:
   IntegerVector       integerSequence(int min,int max);
   std::vector<double> divideIntegerVectorByDouble(IntegerVector vector1,double denominator);
   std::vector<double> rep(double a,int num_reps);
+  IntegerVector intRep(int a,int num_reps);
 
   // accessor functions
 
@@ -49,12 +50,14 @@ public:
 
   void                 setOutputPrefix(std::string);
   void                 setVerbose(bool);
+  void                 setSampleNumClusters(bool);
   std::string                 getOutputPrefix(){ return outputPrefix; }
   // MCMC functions
 
   std::vector<double>       dummyFunction(std::vector<double> dummyInput);
   void writeOutputFiles(void);
   void makeOutputFiles(void);
+  void postInitialization(void);
 
 private:
   DoubleVector        data;
@@ -72,13 +75,13 @@ private:
   double              concentration_parameter_beta;
   bool                estimate_concentration_parameter;
   bool                verbose;
-
+  bool                sample_num_clusters;
   double              likelihood;
   double              prior;
   int                 generation;
   double min_ESS;
 
-
+  Model&       model;
   Function effectiveSizeFunction;
   Function pminFunction;
   std::string         outputPrefix;
@@ -88,7 +91,7 @@ private:
   Rcpp::List param_vector;
   std::vector<double> proposed_parameters;
   std::vector<double> placeholder;
-  Model&       model;
+
   double              ln_prior_ratio; // for the parameter proposal
   double              ln_hastings_ratio; // for the parameter proposal
   //private methods

@@ -1,8 +1,7 @@
-// #include <Rcpp.h>
+#include <Rcpp.h>
 #include "model.h"
 #include <limits>
 //using namespace Rcpp;
-
 #include <algorithm>
 #include <functional>
 #include "helper.h"
@@ -72,7 +71,7 @@ std::vector<double> NormalModel::single_likelihood_fn(double data,IntegerVector 
 
 Rcpp::List NormalModel::base_distn_sim(int num_categories)
 {
-
+  RNGScope rngScope;
   Normal normal_dist=Normal(mean_prior_mean,mean_prior_sd*mean_prior_sd);
   DoubleVector means(num_categories);
   means=normal_dist.sample(num_categories);
@@ -99,34 +98,30 @@ DoubleVector NormalModel::base_distn(Rcpp::List params)
  return lp;
 }
 
-
 Rcpp::List NormalModel::proposal_distn(Rcpp::List params){
-  std::vector<double> params1=params(0);
-  std::vector<double> params2=params(1);
+
+  std::vector<double> new_params1=params(0);
+  std::vector<double> new_params2=params(1);
+
   int params_length=params.length();
-
-  std::vector<double> new_params1=params1;
-  std::vector<double> new_params2=params2;
-
   Normal normal_dist=Normal(0,1);
+  int k=normal_dist.sample_int(params_length);
 
- // choose a parameter at random
-  int j;
-  int k = normal_dist.sample_int(params_length);
 
-  if(k==1) {
-     j=normal_dist.sample_int(params1.size());
-     new_params1[j-1]=params1[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd);
-  } else { //if  k==2
+  std::vector<double> paramsK=params(k-1);
+  int j=normal_dist.sample_int(paramsK.size());
 
-    j=normal_dist.sample_int(params2.size());
-    new_params2[j-1]=params2[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd);
-    // if the new variance is negative,
-    // reflect it back into the positive
-    new_params2[j-1]=fabs(new_params2[j-1]);
+  std::vector<double> new_paramsK=params(k-1);
+  new_paramsK[j-1]=paramsK[j-1]+R::rnorm(0,proposal_disturbance_sd);
+
+  if (k==1) {new_params1=new_paramsK;}
+  if (k==2) {
+    new_paramsK[j-1]=std::abs(new_paramsK[j-1]);
+    new_params2=new_paramsK;
   }
 
   return Rcpp::List::create(Named("means")=new_params1,Named("sds")=new_params2);
+
 }
 
 
@@ -217,12 +212,12 @@ Rcpp::List GammaModel::base_distn_sim(int num_categories)
 
   DoubleVector shapes(num_categories);
   shapes=shape_normal_dist.sample(num_categories);
-  for(int i=0;i<shapes.size();i++){shapes[i]=fabs(shapes[i]);} //making sure this don't go negative
+  for(int i=0;i<shapes.size();i++){shapes[i]=std::abs(shapes[i]);} //making sure this don't go negative
 
   Normal rate_normal_dist=Normal(rate_prior_mean,rate_prior_sd *rate_prior_sd ); //takes variance
   DoubleVector rates(num_categories);
   rates=rate_normal_dist.sample(num_categories);
-  for(int i=0;i<rates.size();i++){rates[i]=fabs(rates[i]);} //making sure this don't go negative
+  for(int i=0;i<rates.size();i++){rates[i]=std::abs(rates[i]);} //making sure this don't go negative
   return Rcpp::List::create(Named("shapes")=shapes,Named("rates")=rates);
 
 }
@@ -261,11 +256,11 @@ Rcpp::List GammaModel::proposal_distn(Rcpp::List params){
 
   if(k==1) {
     j=normal_dist.sample_int(params1.size());
-    new_params1[j-1]=fabs(params1[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd)); //fabs 'cause this should > 0
+    new_params1[j-1]=std::abs(params1[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd)); //fabs 'cause this should > 0
   } else { //if  k==2
 
     j=normal_dist.sample_int(params2.size());
-    new_params2[j-1]=fabs(params2[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd)); //fabs 'cause this should > 0
+    new_params2[j-1]=std::abs(params2[j-1]+normal_dist.rnorm(0,proposal_disturbance_sd)); //fabs 'cause this should > 0
 
   }
 
@@ -302,8 +297,8 @@ RCPP_MODULE(Models) {
     .method("base_distn_sim",&Model::base_distn_sim)
     .method("base_distn",&Model::base_distn)
     .method("proposal_distn",&Model::proposal_distn)
-    .method("getConcentrationParameterAlpha",&NormalModel::getConcentrationParameterAlpha)
-    .method("getEstimateConcentrationParameter",&NormalModel::getEstimateConcentrationParameter)
+    .method("getConcentrationParameterAlpha",&Model::getConcentrationParameterAlpha)
+    .method("getEstimateConcentrationParameter",&Model::getEstimateConcentrationParameter)
 
     ;
 

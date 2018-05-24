@@ -9,8 +9,12 @@
 #'@title A Reference Class that provides DPP functionality
 #'
 #'
-#' @description This MCMC takes data numeric vector (X) and assigns the elements of X
-#' to a (potentially infinite) number of normal distributions. The individual normal distributions from a mixture of normals can be inferred.
+#' @description This class implements the main functionality of this package.
+#' The consturctor receives a numeric vector (Y) and priors. A model should be provided specifying  the distributions
+#' to be used for inference (e.g. NormalModel for Normal distributions or GammaModel for Gamma distributions).
+#' Then an MCMC algorithm will be used to infer a number of distributions (k) that fit the data.
+#' The prior for the number of distributions is specified by the concentration_parameter_alpha and expected_k.
+#' Once the data and priors are specified the method run is used to start the inference.
 #'
 #' @field  dpp_mcmc_object a DPPmcmc object
 #' @examples
@@ -20,13 +24,15 @@
 #'                  sd_prior_shape=3,
 #'                  sd_prior_rate=20,
 #'                  estimate_concentration_parameter=TRUE,
-#'                  concentration_parameter_alpha=10)
+#'                  concentration_parameter_alpha=10,
+#'                   proposal_disturbance_sd=0.1)
 #'
 #' #simulating three normal distributions
 #' y <- c(rnorm(100,mean=0.2,sd=0.05), rnorm(100,0.7,0.05), rnorm(100,1.3,0.1))
 #' hist(y,breaks=30)
 #'
 #' #setwd("~/yourwd") #mcmc log files will be saved here
+#' \dontrun{
 #' my_dpp_analysis <- dppMCMC_C(data=y,
 #'                              output = "output_prefix_",
 #'                              model=normal.model,
@@ -40,7 +46,7 @@
 #' hist(my_dpp_analysis$getNumCategoryTrace(0.25))
 #'
 #' my_dpp_analysis$getNumCategoryProbabilities(0.25)
-#'
+#'}
 #'
 
 
@@ -66,13 +72,16 @@ dppMCMC_C <- setRefClass(
                           num_auxiliary_tables = 4,
                           expected_k = 2,
                           power = 1,
-                          verbose=TRUE) {
+                          verbose=TRUE,
+                          sample.num.clusters=TRUE) {
 
       "the class constructor, initializes DPPmcmc object with data and parameters"  # a docstring for documentation
        #initialize DPPmcmc object with data and parameters
        dpp_mcmc_object <<- new(DPPmcmc,data, model,num_auxiliary_tables,expected_k,power,effectiveSize,pmin)
        dpp_mcmc_object$setOutputPrefix(output)
        dpp_mcmc_object$setVerbose(verbose)
+       dpp_mcmc_object$setSampleNumClusters(sample.num.clusters)
+       dpp_mcmc_object$postInitialization()
        dpp_mcmc_object$makeOutputFiles()
 
     }, # end initialize
@@ -94,8 +103,7 @@ dppMCMC_C <- setRefClass(
                    min_ess = 500,
                    max_gen = 1e5) {
        "starts the MCMC run" # a docstring for documntation
-       dpp_mcmc_object$run(generations,auto_stop,max_gen,min_ess,0,sample_freq)
-
+       dpp_mcmc_object$run(generations,auto_stop,max_gen,min_ess,random,sample_freq)
     },
 
     getNumCategoryTrace = function(burnin_cutoff=0.25) {

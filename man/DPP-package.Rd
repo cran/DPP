@@ -3,7 +3,6 @@
 \alias{DPP}
 \alias{DPPmcmc}
 \alias{Model}
-\alias{expectedNumberOfClusters}
 \alias{Rcpp_DPPmcmc}
 \alias{Rcpp_Model}
 \docType{package}

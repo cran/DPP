@@ -5,7 +5,6 @@
 #include <fstream>
 #include <sstream>
 #include "math.h"
-
 using namespace Rcpp;
 
 DPPmcmc::DPPmcmc(
@@ -24,7 +23,7 @@ DPPmcmc::DPPmcmc(
          //textBarFunction(textBarFunction_)
 
 {
-
+   RNGScope rngScope;
    power=power_;
    data=data_;
    num_auxiliary_tables=num_auxiliary_tables_;
@@ -44,26 +43,88 @@ DPPmcmc::DPPmcmc(
        concentration_parameter=concentrationParameterFromK(num_elements,expected_k_);
      }
 
+     //the following are initialized as TRUE but can be updated after object init.
+     verbose=TRUE;
+     sample_num_clusters=TRUE;
 
-/// randomly generate starting values
-   allocation_vector=simulateChineseRestaurant(num_elements,concentration_parameter);
-
-   num_categories=max(allocation_vector);
-   num_elements_in_each_category=Rcpp::table(allocation_vector);
-   param_vector=model.base_distn_sim(num_categories);
-
-   num_params=param_vector.length();
-
-   std::vector<double> likelihood_vector=model.likelihood_fn(data,allocation_vector,param_vector,power);
-   likelihood=sumVector(likelihood_vector);
-
-   std::vector<double> base_dist=makeDoubleVectorStandardDoubleVector(model.base_distn(param_vector));
-   prior=sumVector(base_dist);
-
-   generation=0;
-   verbose=TRUE;
-   min_ESS=0;
+     //some code here was moved to the postInitialization method
+     //and will be called after some values are sent from the R wrapper class.
 }
+
+
+void DPPmcmc::postInitialization(void) {
+  // randomly generate starting values
+
+
+  RNGScope rngScope;
+  if(sample_num_clusters){
+    allocation_vector=simulateChineseRestaurant(num_elements,concentration_parameter);
+  } else {  //initialize with fix vector of 1
+    allocation_vector=intRep(1,num_elements);
+  }
+
+
+
+  num_categories=max(allocation_vector);
+  num_elements_in_each_category=Rcpp::table(allocation_vector);
+
+  param_vector=model.base_distn_sim(num_categories);
+
+/*
+  //removing stochasticity
+  DoubleVector means(1);
+  means[0]=0.7;
+  DoubleVector gamma_sds(1);
+  gamma_sds[0]=0.3;
+
+  Rcpp::List new_params=Rcpp::List::create(Named("means")=means,Named("sds")=gamma_sds);
+  param_vector=new_params;
+  //end removing stochasticity
+*/
+
+  /*
+   //  TODO For debugging only, can be removed later
+   std::ostringstream strs;
+  strs << "allocation_vector:\t";
+  strs << allocation_vector;
+  strs<<"\n";
+  strs << "max allocation_vector:\t";
+  strs << max(allocation_vector);
+  strs<<"\n";
+  strs << "param_vector:\n";
+
+  DoubleVector param1=param_vector(0);
+  DoubleVector param2=param_vector(1);
+
+  strs << "means:\t";
+
+    for (int i=0;i<param1.size();i++){
+      strs <<"\t"<<param1[i];
+    }
+  strs << "\nsds:\t";
+
+    for (int i=0;i<param2.size();i++){
+      strs <<"\t"<<param2[i];
+    }
+
+
+  strs<<"\n";
+  write_text_to_log_file(strs.str());
+*/
+
+  num_params=param_vector.length();
+
+  std::vector<double> likelihood_vector=model.likelihood_fn(data,allocation_vector,param_vector,power);
+  likelihood=sumVector(likelihood_vector);
+
+  std::vector<double> base_dist=makeDoubleVectorStandardDoubleVector(model.base_distn(param_vector));
+  prior=sumVector(base_dist);
+
+  generation=0;
+  min_ESS=0;
+}
+
+
 
 
 double DPPmcmc::expectedNumberOfClusters(int num_elements_, double alpha_) {
@@ -79,37 +140,35 @@ double DPPmcmc::expectedNumberOfClusters(int num_elements_, double alpha_) {
 
 
 double DPPmcmc::concentrationParameterFromK(int num_elements_, double expected_num_clusters) {
-  //TODO
-  double alpha = 1.0;
-  double e = expectedNumberOfClusters(num_elements_, alpha);
-  double min_alpha = 0.0;
-  double max_alpha = std::numeric_limits<double>::max();
 
-  while ( std::abs(e - expected_num_clusters) > 1e-10 ) {
+  double alpha = 1.0;
+  double e;
+  double min_alpha = 0.0;
+  //double max_alpha = std::numeric_limits<double>::max();
+  double max_alpha = 1000;
+
+  while ( true ) {
+    e=expectedNumberOfClusters(num_elements_, alpha);
+    if ( std::fabs(e- expected_num_clusters) < 1e-6 ) break;
 
     if ( e > expected_num_clusters ) {
       max_alpha = alpha;
-      alpha = min_alpha + (alpha - min_alpha) / 2;
-    } else if ( e < expected_num_clusters ) {
+      alpha = min_alpha + (alpha - min_alpha) / 2.0;
+    } else {
       min_alpha = alpha;
-      alpha = 2 * alpha;
-      if ( alpha > max_alpha ) {
-        alpha = max_alpha;
-      }
+      alpha = min_alpha + (max_alpha - alpha) / 2.0;
     }
-
-    e = expectedNumberOfClusters(num_elements_, alpha);
 
   }
 
   return alpha;
+
 }
 
 IntegerVector DPPmcmc::simulateChineseRestaurant(int num_elements_, double alpha_) {
 
-  RNGScope scope;
   IntegerVector res(num_elements_);
-
+  RNGScope rngScope;
   int current_table = 0;
 
   for (int i = 0; i < num_elements_; ++i) {
@@ -118,7 +177,7 @@ IntegerVector DPPmcmc::simulateChineseRestaurant(int num_elements_, double alpha
     if ( u < new_cat_prob ) {
       res[i] = current_table++;
     } else {
-      int old_category_with_element = static_cast<int>(::Rf_runif(0,i));
+      int old_category_with_element = static_cast<int>(R::runif(0,i));
       res[i] = res[old_category_with_element];
     }
   }
@@ -135,6 +194,10 @@ void DPPmcmc::setVerbose(bool verbose_) {
   verbose=verbose_;
 }
 
+void DPPmcmc::setSampleNumClusters(bool sample_num_clusters_) {
+  sample_num_clusters=sample_num_clusters_;
+
+}
 
 
 void DPPmcmc::concentrationParameterProposal() {
@@ -151,8 +214,8 @@ void DPPmcmc::concentrationParameterProposal() {
   // alpha ~ pi * Gamma(shape = alpha + num_tables, rate = beta - log(eta)) &
   //         (1 - pi) * Gamma(shape= alpha + num_tables + 1, rate = beta - log(eta))
 
-  double pi = (concentration_parameter_alpha + num_categories - 1) / ( num_elements * (concentration_parameter_beta - log(eta)) );
-  double rate = concentration_parameter_beta - log(eta);
+  double pi = (concentration_parameter_alpha + num_categories - 1) / ( num_elements * (concentration_parameter_beta - std::log(eta)) );
+  double rate = concentration_parameter_beta - std::log(eta);
 
   double u = runif(1,0,1)[0];
   if ( (u / (1 - u)) < pi ) {
@@ -167,22 +230,9 @@ void DPPmcmc::concentrationParameterProposal() {
 
 
 void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,bool random,int sample_freq){
-
-/*run = function(generations,
- sample_freq = generations / 1000,
-  log_file,
-  allocation_file,
-  param_file,
-  append = TRUE,
-  random = FALSE,
-  verbose = TRUE,
-  auto_stop = FALSE,
-  min_ess = 500,
-  max_gen = 1e5) {
-
-
- */
-    //bool auto_stop=false;
+    //the following definition of rngScope is necesary
+    //for propor behavioyr of the calls ro R::unif
+    RNGScope rngScope;
     bool append=true;
 // Set up the output file
     if (!append | auto_stop) {
@@ -190,20 +240,15 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
       makeOutputFiles();
     }
 
+  int num_logged=0;
+  return_num_cats_trace=std::vector<int>(1);
 
-    int num_logged=0;
-    return_num_cats_trace=std::vector<int>(1);
-
-    std::vector<double> likelihood_trace(1000,NA_REAL);
-    std::vector<int> num_cats_trace(1000,NA_INTEGER);
-    std::vector<double> alpha_trace(1000,NA_REAL);
-    if (auto_stop) {
-      //write_text_to_log_file("auto_stop is on");
-    }
-
+  std::vector<double> likelihood_trace(1000,NA_REAL);
+  std::vector<int> num_cats_trace(1000,NA_INTEGER);
+  std::vector<double> alpha_trace(1000,NA_REAL);
 
   int init_generations=generation;
- // int sample_freq=(int)floor(generations/1000.0);
+
   sample_freq=std::max(1,sample_freq);
 
   int i=0;
@@ -233,20 +278,34 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
 */
 
     //do allocation proposal
-    if ( random ) {
-     k=normal_distribution.sample_int(num_elements);
-     allocationProposal(k);
-    } else {
+
+
+    if(sample_num_clusters){
+      if ( random ) {
+       k=normal_distribution.sample_int(num_elements);
+       allocationProposal(k);
+      } else {
       for(k=1;k<=num_elements;k++) allocationProposal(k);
+      }
     }
+
+
+
+    //update the likelihood
+    std::vector<double> likelihood_vector=model.likelihood_fn(data,allocation_vector,param_vector,power);
+    likelihood=sumVector(likelihood_vector);
+
+    std::vector<double> base_dist= makeDoubleVectorStandardDoubleVector(model.base_distn(param_vector));
+    prior=sumVector(base_dist);
+
 /*
-    //  TODO For debugging only, can be removed later
-    std::ostringstream strs2;
+     //  TODO For debugging only, can be removed later
+     std::ostringstream strs2;
     strs2 << "iteration:\t";
     strs2 << i;
     strs2 << "likelihood:\t";
     strs2 << likelihood;
-    strs2 << "allocation:\t";
+    strs2 << "\nallocation:\t";
     strs2 << allocation_vector;
     strs2 << "\n";
     //strs<<"\t prior_theta:\t";
@@ -256,16 +315,9 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
     write_text_to_log_file(strs2.str());
     //end of TODO
 */
-    //update the likelihood
-    std::vector<double> likelihood_vector=model.likelihood_fn(data,allocation_vector,param_vector,power);
-    likelihood=sumVector(likelihood_vector);
-
-    std::vector<double> base_dist= makeDoubleVectorStandardDoubleVector(model.base_distn(param_vector));
-    prior=sumVector(base_dist);
-
-
 
     Uniform uniform_dist=Uniform(0,1);
+
 
     for(k=1;k<=num_categories;k++){
 
@@ -278,9 +330,39 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
       std::vector<double> prior_theta_vector= makeDoubleVectorStandardDoubleVector(model.base_distn(param_theta));
       prior_theta=sumVector(prior_theta_vector);
 
-      double R=exp(likelihood_theta-likelihood+prior_theta-prior);
-      double u=uniform_dist.sample(1)[0];
+      double R=std::exp(likelihood_theta-likelihood+prior_theta-prior);
+      //double u=uniform_dist.sample(1)[0];
+      double u=R::runif(0.0,1.0);
 
+/*
+         //  TODO For debugging only, can be removed later
+       std::ostringstream strs;
+      strs << "likelihood:\t";
+      strs << likelihood;
+      strs << "param_theta_0:\t";
+      strs << makeDoubleVectorStandardDoubleVector(param_theta(0))[0];
+      strs << "param_theta_1:\t";
+      strs << makeDoubleVectorStandardDoubleVector(param_theta(1))[0];
+      strs<<"\t prior_theta:\t";
+      strs<<prior_theta;
+      strs<<"\t u:\t";
+      strs<<u;
+      strs<<"\t R:\t";
+      strs<<R;
+      strs<<"\t likelihood_theta:\t";
+      strs<<likelihood_theta;
+      strs<<"\t prior:\t";
+      strs<<prior;
+      strs<<"\nsuperSuma:\t";
+      strs<<(likelihood_theta-likelihood+prior_theta-prior);
+      strs<<i<<"\t"<<R<<"\t"<<u<<"\t"<<makeDoubleVectorStandardDoubleVector(param_theta(0))[0];
+
+
+      // strs<<"\t param_vector:\t";
+      //  strs<<param_theta;
+      write_text_to_log_file(strs.str());
+      //end TODO
+*/
       if(u < R) {
         likelihood=likelihood_theta;
         prior=prior_theta;
@@ -293,7 +375,9 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
         strs<<prior_theta;
        // strs<<"\t param_vector:\t";
       //  strs<<param_theta;
-        write_text_to_log_file(strs.str());*/
+        write_text_to_log_file(strs.str());
+        //end TODO
+        */
 
       }
 
@@ -306,10 +390,7 @@ void  DPPmcmc::run(int generations,bool auto_stop,int max_gen,double min_ess,boo
     }
 
 
-
    if ((i % sample_freq) == 0) writeOutputFiles();
-
-
 
 
     // check for MCMC stop
@@ -389,7 +470,6 @@ void DPPmcmc::makeOutputFiles(void){
 
   if(of.is_open())
   {
-    //of << "generation\tlikelihood\tnum_categories\tnum_elements_in_cat\tconc"<< std::endl;
     of << "generation\tlikelihood\tnum_categories\tconc\tmin_ESS"<< std::endl;
     of.flush();
     of.close();//std::cout<<"wrote the file successfully!"<<std::endl;
@@ -561,21 +641,7 @@ void DPPmcmc::allocationProposal(int element){
   //compute the likelihood for the
   //categories that exist.
 
-/*
-  DoubleVector means(4);
-  means[0]=0.5;
-  means[1]=0.6;
-  means[2]=0.65;
-  means[3]=0.7;
-  DoubleVector gamma_sds(4);
-  gamma_sds[0]=0.1;
-  gamma_sds[1]=0.12;
-  gamma_sds[2]=0.14;
-  gamma_sds[3]=0.17;
 
-
-  Rcpp::List new_params=Rcpp::List::create(Named("means")=means,Named("sds")=gamma_sds);
-*/
 
 
 
@@ -632,7 +698,15 @@ void DPPmcmc::allocationProposal(int element){
   //category_likelihoods= old_category_likelihoods.insert(old_category_likelihoods.end(),new_category_likelihoods.begin(),new_category_likelihoods.end());
    std::vector<double> category_likelihoods=concatenateVectors(old_category_likelihoods,new_category_likelihoods);
 
-
+   /*
+   //for debugging
+   std::ostringstream strs;
+   strs<<"\t Rcpp_category_likelihoods:\t";
+   for(int i=0;i<category_likelihoods.size();i++) strs<<category_likelihoods[i]<<"\t";
+   strs<<" ## end old category likelihoods \n";
+   write_text_to_log_file(strs.str());
+   //end for debugging
+  */
   //compute the category priors
    std::vector<double> existing_priors=divideIntegerVectorByDouble(num_elements_in_each_category, (concentration_parameter + num_elements - 1));
      std::vector<double> augmented_priors=
@@ -641,11 +715,13 @@ void DPPmcmc::allocationProposal(int element){
 
   //choose the new rate category
   std::vector<double> category_probs=expVector(category_likelihoods+priors);
-/*
+
+  /*
   //  TODO For debugging only, can be removed later
    std::ostringstream strs2;
   strs2 << "num_elements_in_each_category:\t";
-  strs2 << num_elements_in_each_category;
+  //strs2 << num_elements_in_each_category;
+  for(int i=0;i<num_elements_in_each_category.size();i++) strs2<<num_elements_in_each_category[i]<<"\t";
   strs2<<"\t category_likelihoods:\t";
   for(int i=0;i<category_likelihoods.size();i++) strs2<<category_likelihoods[i]<<"\t";
   //strs<<"\t category_likelihoo\n";
@@ -784,6 +860,15 @@ void DPPmcmc::allocationProposal(int element){
      }
   }
 
+  /*
+  //  TODO For debugging only, can be removed later
+  std::ostringstream strs8;
+  strs8 << "\nnum_elements_in_each_category:\t";
+  strs8 << num_elements_in_each_category<<"\n";
+ strs8 <<"\n";
+  write_text_to_log_file(strs8.str());
+  // end TODO
+  */
 }
 
 
@@ -822,11 +907,21 @@ res[2]=1;
 res[3]=1;
 res[4]=1;*/
 
- std::vector<double> causa(100);
- for(int i=0;i<100;i++) { causa[i]=::Rf_rgamma(dummyInput[0],dummyInput[1]); }
+ //std::vector<double> causa(100);
+ //for(int i=0;i<100;i++) { causa[i]=::Rf_rgamma(dummyInput[0],dummyInput[1]); }
 // causa= makeIntegerVectorStandardDoubleVector(integerSequence(1100,5000));
 
+  Normal myNormal=Normal(0,0.5);
+  Uniform uniform_dist=Uniform(0,1);
+  //myNormal.sample_int(2);
+  //std::vector<double> causa(100);
+  //for(int i=0;i<100;i++) {causa[i]=myNormal.rnorm(dummyInput[0],dummyInput[1]); }
 
+   std::vector<double> causa(100);
+  // for(int i=0;i<100;i++) {causa[i]=myNormal.sample_int_prob(dummyInput); }
+  for(int i=0;i<100;i++) {causa[i]=myNormal.sample_int(200); }
+  //for(int i=0;i<100;i++) {causa[i]= uniform_dist.sample(1)[0]; }
+  //for(int i=0;i<dummyInput.size();i++) {causa[i]= exp(dummyInput[i]); }
 
  /*
 IntegerVector res(causa.size());
@@ -869,6 +964,10 @@ IntegerVector DPPmcmc::integerSequence(int min,int max){
   return my_sequence;
 }
 
+
+
+
+
 std::vector<int> DPPmcmc::evaluateVectorGreaterThanInt(std::vector<int> vector1,int val){
   std::vector<int> returnVector(vector1.size());
   for(int i=0;i<vector1.size();i++){
@@ -900,6 +999,17 @@ std::vector<double> DPPmcmc::rep(double a,int num_reps)
   return result;
 }
 
+
+IntegerVector DPPmcmc::intRep(int a,int num_reps)
+{
+
+  IntegerVector result(num_reps);
+  for(int i=0;i<num_reps;i++)
+  {
+    result[i]=a;
+  }
+  return result;
+}
 
 
 void DPPmcmc::write_text_to_log_file( const std::string &text )
@@ -948,8 +1058,10 @@ RCPP_MODULE(DPPmcmc) {
    // .method("allocationProposal", &DPPmcmc::allocationProposal)
   //  .method("concentrationParameterProposal", &DPPmcmc::concentrationParameterProposal)
     .method("writeOutputFiles", &DPPmcmc::writeOutputFiles)
+    .method("postInitialization", &DPPmcmc::postInitialization)
     .method("setOutputPrefix", &DPPmcmc::setOutputPrefix)
     .method("setVerbose", &DPPmcmc::setVerbose)
+    .method("setSampleNumClusters", &DPPmcmc::setSampleNumClusters)
     .method("getOutputPrefix", &DPPmcmc::getOutputPrefix)
     .method("makeOutputFiles", &DPPmcmc::makeOutputFiles)
     .method("run", &DPPmcmc::run)

@@ -5,8 +5,12 @@
 \alias{dppMCMC_C}
 \title{A Reference Class that provides DPP functionality}
 \description{
-This MCMC takes data numeric vector (Y) and assigns the elements of Y
-to a (potentially infinite) number of normal distributions. The individual normal distributions from a mixture of normals can be inferred.
+This class implements the main functionality of this package.
+The consturctor receives a numeric vector (Y) and priors. A model should be provided specifying  the distributions
+to be used for inference (e.g. NormalModel for Normal distributions or GammaModel for Gamma distributions).
+Then an MCMC algorithm will be used to infer a number of distributions (k) that fit the data.
+The prior for the number of distributions is specified by the concentration_parameter_alpha and expected_k.
+Once the data and priors are specified the method run is used to start the inference.
 }
 \details{
 Class dppMCMC_C
@@ -25,8 +29,8 @@ Class \code{dppMCMC_C} A Reference Class that provides DPP functionality
 
 \item{\code{getNumCategoryTrace(burnin_cutoff = 0.25)}}{returns the trace vector for the inferred number of categories in the data}
 
-\item{\code{initialize(data, output, model, num_auxiliary_tables = 4,
-  expected_k = 2, power = 1, verbose = TRUE)}}{the class constructor, initializes DPPmcmc object with data and parameters}
+\item{\code{initialize(data, output, model, num_auxiliary_tables = 4, expected_k = 2,
+  power = 1, verbose = TRUE, sample.num.clusters = TRUE)}}{the class constructor, initializes DPPmcmc object with data and parameters}
 
 \item{\code{run(generations, sample_freq = generations/1000, log_file, allocation_file,
   param_file, append = TRUE, random = FALSE, auto_stop = FALSE,
@@ -41,13 +45,14 @@ normal.model<-new(NormalModel,
                  sd_prior_rate=20,
                  estimate_concentration_parameter=TRUE,
                  concentration_parameter_alpha=10,
-                 proposal_disturbance_sd=0.1)
+                  proposal_disturbance_sd=0.1)
 
 #simulating three normal distributions
 y <- c(rnorm(100,mean=0.2,sd=0.05), rnorm(100,0.7,0.05), rnorm(100,1.3,0.1))
 hist(y,breaks=30)
 
 #setwd("~/yourwd") #mcmc log files will be saved here
+\dontrun{
 my_dpp_analysis <- dppMCMC_C(data=y,
                              output = "output_prefix_",
                              model=normal.model,
@@ -55,7 +60,6 @@ my_dpp_analysis <- dppMCMC_C(data=y,
                              expected_k=1.5,
                              power=1)
 #running the mcmc  , generations will be ignored because auto_stop=true
-\dontrun{
 my_dpp_analysis$run(generations=1000,auto_stop=TRUE,max_gen = 10000,min_ess = 500)
 
 #we get rid of the first 25\% of the output (burn-in)

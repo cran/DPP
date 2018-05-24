@@ -1,4 +1,4 @@
-// #include <Rcpp.h>
+//#include <Rcpp.h>
 //#include <RcppArmadillo.h>
 #include "Distribution.h"
 #include <limits>
@@ -79,7 +79,6 @@ Normal::Normal(const Normal& other) : mean(other.mean), variance(other.variance)
 }
 double Normal::rnorm(double mean, double sd)
 {
-
   return R::rnorm(mean,sd);
 }
 double Normal::lnProb( std::vector<double> val ){
@@ -115,9 +114,10 @@ DoubleVector Normal::lnDNorm(DoubleVector val ){
 
 int Normal::sample_int(int max)
 { //mimics R sample.int sampling one value between 1 and max
-  Uniform uniform_dist=Uniform(1,max+0.99999);
- // return(std::floor(uniform_dist.sample(1));
- double returnVal=uniform_dist.sample(1)[0];
+
+  double returnVal;
+  RNGScope rngScope;
+  returnVal=R::runif(1,max+0.99999);
   return std::floor(returnVal);
 
 }
@@ -125,7 +125,8 @@ int Normal::sample_int(int max)
 int Normal::sample_int_prob(std::vector<double> probs)
 {
   std::vector<double> limits(probs.size());
-
+  int chosen_int=probs.size();
+  RNGScope rngScope;
   limits[0]=probs[0];
 
 
@@ -135,7 +136,7 @@ int Normal::sample_int_prob(std::vector<double> probs)
 
   double sampledVal=  ::Rf_runif(0,limits[limits.size()-1]);
   //double sampledVal=  ::Rf_runif(0,1);
-  int chosen_int=probs.size();
+
 
   for(int i=0;i<limits.size();i++){
     if(sampledVal<limits[i]){
@@ -158,7 +159,7 @@ std::vector<double> Normal::sample( int n ){
     double f = ::Rf_rnorm(mean,sqrt(variance));
     std::fill(res.begin(),res.end(),f);
   } else {
-    for(int i = 0; i < n; ++i) {
+   for(int i = 0; i < n; ++i) {
       res.at(i) = ::Rf_rnorm(mean,sqrt(variance));
     }
   }
